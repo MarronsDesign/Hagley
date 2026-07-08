@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>360 Viewpoint Viewer</title>
+
+<style>
+:root{
+  --panel:rgba(8,13,20,.72);
+  --panel-strong:rgba(11,18,28,.88);
+  --border:rgba(255,255,255,.14);
+  --text:rgba(255,255,255,.96);
+  --muted:rgba(255,255,255,.68);
+  --accent:#38c172;
+  --accent-dark:#24a35a;
+  --shadow:0 18px 42px rgba(0,0,0,.32);
+}
+*{box-sizing:border-box}
+html,body{
+  width:100%;height:100%;margin:0;overflow:hidden;background:#06090d;color:var(--text);
+  font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif
+}
+#viewer{
+  position:fixed;inset:0;background:#000;touch-action:none;cursor:grab
+}
+body.dragging #viewer{cursor:grabbing}
+body.zoom-in #viewer{cursor:zoom-in}
+body.zoom-out #viewer{cursor:zoom-out}
+canvas{display:block;width:100%;height:100%}
+
+.loading{
+  position:fixed;inset:0;z-index:90;display:grid;place-items:center;
+  background:radial-gradient(circle,rgba(35,50,70,.78),rgba(5,7,10,.98));
+  font-size:15px;letter-spacing:.01em;transition:opacity .3s ease
+}
+.loading.hide{opacity:0;pointer-events:none}
+
+.panel{
+  position:fixed;z-index:30;background:var(--panel);border:1px solid var(--border);
+  border-radius:18px;box-shadow:var(--shadow);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)
+}
+.title{
+  top:max(18px,env(safe-area-inset-top));left:max(18px,env(safe-area-inset-left));
+  width:min(390px,calc(100vw - 36px));padding:14px 16px
+}
+.title h1{margin:0 0 6px;font-size:16px;line-height:1.2}
+.title p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
+.chip{
+  display:inline-flex;margin-top:9px;padding:7px 10px;border-radius:999px;background:rgba(255,255,255,.08);
+  font-size:11px;font-weight:850;text-transform:uppercase;letter-spacing:.07em
+}
+
+.controls{
+  left:max(18px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom));
+  display:flex;gap:8px;padding:10px
+}
+.ctrl{
+  height:46px;min-width:46px;border:1px solid var(--border);border-radius:14px;background:rgba(8,13,20,.82);
+  color:var(--text);font:inherit;font-size:18px;font-weight:850;cursor:pointer
+}
+.ctrl.wide{padding:0 14px;font-size:13px}
+.ctrl:hover,.mapPin:hover,.nextBtn:hover,.miniBtn:hover{background:rgba(255,255,255,.16)}
+
+.mapPanel{
+  top:max(18px,env(safe-area-inset-top));
+  right:max(18px,env(safe-area-inset-right));
+  width:min(360px,calc(100vw - 36px));
+  padding:12px;
+  background:var(--panel-strong);
+}
+.mapHeader{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px
+}
+.mapHeader h2{
+  margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.82)
+}
+.currentPill{
+  display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:30px;
+  border-radius:999px;background:rgba(36,163,90,.92);font-size:14px;font-weight:900
+}
+.mapFrame{
+  position:relative;width:100%;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.12);
+  background:#101821
+}
+.mapFrame img{display:block;width:100%;height:auto}
+.mapPin{
+  position:absolute;transform:translate(-50%,-50%);
+  width:34px;height:34px;border:2px solid rgba(255,255,255,.95);border-radius:50%;
+  background:rgba(255,255,255,.92);color:#111;font:inherit;font-size:16px;font-weight:900;
+  display:grid;place-items:center;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.34);
+  transition:transform .16s ease,background .16s ease,color .16s ease,border-color .16s ease
+}
+.mapPin:hover{transform:translate(-50%,-50%) scale(1.08)}
+.mapPin.active{
+  background:rgba(36,163,90,.96);color:#fff;border-color:rgba(255,255,255,.98);
+  box-shadow:0 0 0 5px rgba(56,193,114,.22),0 10px 24px rgba(0,0,0,.34)
+}
+.mapActions{
+  display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px
+}
+.nextBtn{
+  appearance:none;border:1px solid rgba(117,244,167,.32);border-radius:14px;padding:13px 14px;
+  background:linear-gradient(180deg,#3bd17c,#27ab60);color:#fff;font:inherit;font-size:14px;font-weight:900;
+  cursor:pointer;box-shadow:0 14px 28px rgba(39,171,96,.24)
+}
+.mapTools{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.miniBtn{
+  appearance:none;border:1px solid var(--border);border-radius:14px;padding:11px 12px;background:rgba(8,13,20,.72);
+  color:var(--text);font:inherit;font-size:12px;font-weight:800;cursor:pointer
+}
+
+.feedback{
+  position:fixed;left:50%;bottom:max(82px,calc(env(safe-area-inset-bottom) + 82px));
+  transform:translate(-50%,8px);z-index:35;padding:9px 12px;border-radius:999px;
+  background:rgba(8,13,20,.78);font-size:12px;box-shadow:var(--shadow);
+  opacity:0;pointer-events:none;transition:.18s;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)
+}
+.feedback.show{opacity:1;transform:translate(-50%,0)}
+
+@media(max-width:760px){
+  .title,.controls{display:none}
+  .mapPanel{
+    top:auto;left:12px;right:auto;bottom:max(12px,env(safe-area-inset-bottom));
+    width:min(330px,calc(100vw - 24px));
+    padding:10px;border-radius:18px
+  }
+  .mapHeader{margin-bottom:8px}
+  .mapHeader h2{font-size:10px}
+  .currentPill{height:28px;min-width:32px;font-size:13px}
+  .mapFrame{border-radius:12px}
+  .mapPin{width:30px;height:30px;font-size:14px}
+  .mapActions{margin-top:8px;gap:7px}
+  .nextBtn{padding:11px 12px;font-size:13px}
+  .mapTools{grid-template-columns:1fr 1fr}
+  .miniBtn{padding:9px 10px;font-size:11px}
+  .feedback{
+    top:max(14px,env(safe-area-inset-top));bottom:auto;white-space:nowrap
+  }
+}
+
+@media(max-width:390px){
+  .mapPanel{width:min(300px,calc(100vw - 24px))}
+  .mapPin{width:28px;height:28px;font-size:13px}
+}
+</style>
+</head>
+
+<body>
+<div id="viewer" aria-label="Interactive 360 photosphere viewer"></div>
+<div class="loading" id="loading">Loading view…</div>
+
+<section class="panel title">
+  <h1>360 Site View</h1>
+  <p>Click and drag to pan. Scroll or pinch to zoom. Use the aerial map or Next Viewpoint button to move between photospheres.</p>
+  <div class="chip" id="viewChip">View 1</div>
+</section>
+
+<div class="panel controls">
+  <button class="ctrl" id="zoomIn" type="button" aria-label="Zoom in">+</button>
+  <button class="ctrl" id="zoomOut" type="button" aria-label="Zoom out">−</button>
+  <button class="ctrl wide" id="reset" type="button">Reset view</button>
+  <button class="ctrl wide" id="full" type="button">Full screen</button>
+</div>
+
+<aside class="panel mapPanel" aria-label="Viewpoint map navigation">
+  <div class="mapHeader">
+    <h2>Viewpoints</h2>
+    <span class="currentPill" id="currentPill">1</span>
+  </div>
+
+  <div class="mapFrame" id="mapFrame">
+    <img src="viewpoint-map.jpg" alt="Aerial map showing viewpoint locations" />
+  </div>
+
+  <div class="mapActions">
+    <button class="nextBtn" id="nextView" type="button">Next Viewpoint</button>
+    <div class="mapTools">
+      <button class="miniBtn" id="mapReset" type="button">Reset view</button>
+      <button class="miniBtn" id="mapFull" type="button">Full screen</button>
+    </div>
+  </div>
+</aside>
+
+<div class="feedback" id="feedback" aria-live="polite"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js';
+
+/*
+  FILES USED BY THIS SITE
+  Keep these file names in the same folder as this HTML:
+
+  Pano 1.jpg
+  Pano 2.jpg
+  Pano 3.jpg
+  Pano 4.jpg
+  Pano 5.jpg
+  Pano 6.jpg
+  viewpoint-map.jpg
+
+  MAP PIN POSITIONS
+  These are based on the marked-up aerial image you provided.
+  left and top are percentages across the clean aerial map image.
+*/
+
+const SCENES = [
+  { id:"pano1", name:"1", image:"Pano 1.jpg", startYaw:0, startPitch:0, startFov:80, map:{left:54.786, top:47.997} },
+  { id:"pano2", name:"2", image:"Pano 2.jpg", startYaw:0, startPitch:0, startFov:80, map:{left:42.029, top:64.727} },
+  { id:"pano3", name:"3", image:"Pano 3.jpg", startYaw:0, startPitch:0, startFov:80, map:{left:22.715, top:74.572} },
+  { id:"pano4", name:"4", image:"Pano 4.jpg", startYaw:0, startPitch:0, startFov:80, map:{left:66.453, top:37.712} },
+  { id:"pano5", name:"5", image:"Pano 5.jpg", startYaw:0, startPitch:0, startFov:80, map:{left:71.573, top:53.331} },
+  { id:"pano6", name:"6", image:"Pano 6.jpg", startYaw:0, startPitch:0, startFov:80, map:{left:68.850, top:75.204} }
+];
+
+const $ = id => document.getElementById(id);
+const viewer = $("viewer");
+const loading = $("loading");
+const viewChip = $("viewChip");
+const currentPill = $("currentPill");
+const mapFrame = $("mapFrame");
+const feedback = $("feedback");
+
+const zoomIn = $("zoomIn");
+const zoomOut = $("zoomOut");
+const reset = $("reset");
+const full = $("full");
+const mapReset = $("mapReset");
+const mapFull = $("mapFull");
+const nextView = $("nextView");
+
+const LIMITS = { minFov:20, maxFov:105, minPitch:-85, maxPitch:85 };
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(80, innerWidth / innerHeight, 1, 1100);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+viewer.appendChild(renderer.domElement);
+
+const geometry = new THREE.SphereGeometry(500, 120, 80);
+geometry.scale(-1, 1, 1);
+
+const textureLoader = new THREE.TextureLoader();
+const textureCache = new Map();
+
+const material = new THREE.MeshBasicMaterial({ color:0xffffff });
+const mesh = new THREE.Mesh(geometry, material);
+scene.add(mesh);
+
+let currentIndex = 0;
+let currentScene = SCENES[0];
+
+let lon = currentScene.startYaw;
+let lat = currentScene.startPitch;
+let targetLon = lon;
+let targetLat = lat;
+let targetFov = currentScene.startFov;
+
+let isDragging = false;
+let isTwoFinger = false;
+let pointerStartX = 0;
+let pointerStartY = 0;
+let pointerStartLon = 0;
+let pointerStartLat = 0;
+let pinchStartDistance = 0;
+let pinchStartFov = targetFov;
+let zoomTimer = null;
+let feedbackTimer = null;
+let loadToken = 0;
+
+function clamp(value, min, max){
+  return Math.max(min, Math.min(max, value));
+}
+
+function showFeedback(message){
+  feedback.textContent = message;
+  feedback.classList.add("show");
+  clearTimeout(feedbackTimer);
+  feedbackTimer = setTimeout(() => feedback.classList.remove("show"), 1100);
+}
+
+function cursor(state){
+  document.body.classList.remove("dragging", "zoom-in", "zoom-out");
+  if(state) document.body.classList.add(state);
+}
+
+function pulseZoom(direction){
+  clearTimeout(zoomTimer);
+  cursor(direction === "in" ? "zoom-in" : "zoom-out");
+  zoomTimer = setTimeout(() => cursor(isDragging ? "dragging" : ""), 180);
+}
+
+function loadTextureForScene(sceneConfig){
+  if(textureCache.has(sceneConfig.id)){
+    return Promise.resolve(textureCache.get(sceneConfig.id));
+  }
+
+  loading.textContent = `Loading view ${sceneConfig.name}…`;
+  loading.classList.remove("hide");
+
+  return new Promise((resolve, reject) => {
+    textureLoader.load(
+      sceneConfig.image,
+      texture => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.minFilter = THREE.LinearFilter;
+        textureCache.set(sceneConfig.id, texture);
+        resolve(texture);
+      },
+      undefined,
+      error => reject(error)
+    );
+  });
+}
+
+function preloadNeighbours(){
+  const next = SCENES[(currentIndex + 1) % SCENES.length];
+  const previous = SCENES[(currentIndex - 1 + SCENES.length) % SCENES.length];
+
+  [next, previous].forEach(sceneConfig => {
+    if(!textureCache.has(sceneConfig.id)){
+      textureLoader.load(sceneConfig.image, texture => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.minFilter = THREE.LinearFilter;
+        textureCache.set(sceneConfig.id, texture);
+      });
+    }
+  });
+}
+
+async function setScene(index, options = {}){
+  const nextScene = SCENES[index];
+  if(!nextScene) return;
+
+  const thisLoad = ++loadToken;
+
+  try{
+    const texture = await loadTextureForScene(nextScene);
+    if(thisLoad !== loadToken) return;
+
+    material.map = texture;
+    material.needsUpdate = true;
+
+    currentIndex = index;
+    currentScene = nextScene;
+
+    targetLon = currentScene.startYaw;
+    targetLat = currentScene.startPitch;
+    targetFov = currentScene.startFov;
+
+    if(options.instant){
+      lon = targetLon;
+      lat = targetLat;
+      camera.fov = targetFov;
+      camera.updateProjectionMatrix();
+    }
+
+    updateUI();
+    preloadNeighbours();
+
+    loading.classList.add("hide");
+
+    if(!options.instant){
+      showFeedback(`View ${currentScene.name}`);
+    }
+  }catch(error){
+    loading.textContent = `Could not load ${nextScene.image}. Check the file is in the same folder as this page.`;
+  }
+}
+
+function updateUI(){
+  viewChip.textContent = `View ${currentScene.name}`;
+  currentPill.textContent = currentScene.name;
+
+  mapFrame.querySelectorAll(".mapPin").forEach(pin => {
+    pin.classList.toggle("active", pin.dataset.index === String(currentIndex));
+  });
+}
+
+function buildMapPins(){
+  SCENES.forEach((sceneConfig, index) => {
+    const button = document.createElement("button");
+    button.className = "mapPin";
+    button.type = "button";
+    button.textContent = sceneConfig.name;
+    button.dataset.index = String(index);
+    button.style.left = `${sceneConfig.map.left}%`;
+    button.style.top = `${sceneConfig.map.top}%`;
+    button.setAttribute("aria-label", `Go to viewpoint ${sceneConfig.name}`);
+    button.addEventListener("click", () => setScene(index));
+    mapFrame.appendChild(button);
+  });
+}
+
+function nextViewpoint(){
+  setScene((currentIndex + 1) % SCENES.length);
+}
+
+function resetView(){
+  targetLon = currentScene.startYaw;
+  targetLat = currentScene.startPitch;
+  targetFov = currentScene.startFov;
+  showFeedback("View reset");
+}
+
+function adjustZoom(amount){
+  targetFov = clamp(targetFov + amount, LIMITS.minFov, LIMITS.maxFov);
+}
+
+function handleWheel(event){
+  event.preventDefault();
+  const step = Math.sign(event.deltaY) * Math.min(4.5, Math.max(1.5, Math.abs(event.deltaY) * 0.015));
+  adjustZoom(step);
+  pulseZoom(step < 0 ? "in" : "out");
+}
+
+function touchDistance(touches){
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
+}
+
+function toggleFullscreen(){
+  if(document.fullscreenElement){
+    document.exitFullscreen?.();
+  }else{
+    document.documentElement.requestFullscreen?.();
+  }
+}
+
+function updateFullscreenLabels(){
+  const label = document.fullscreenElement ? "Exit full screen" : "Full screen";
+  full.textContent = label;
+  mapFull.textContent = label;
+}
+
+viewer.addEventListener("wheel", handleWheel, { passive:false });
+
+viewer.addEventListener("pointerdown", event => {
+  if(event.pointerType === "mouse" && event.button !== 0) return;
+  isDragging = true;
+  isTwoFinger = false;
+  pointerStartX = event.clientX;
+  pointerStartY = event.clientY;
+  pointerStartLon = targetLon;
+  pointerStartLat = targetLat;
+  cursor("dragging");
+  viewer.setPointerCapture?.(event.pointerId);
+});
+
+window.addEventListener("pointermove", event => {
+  if(!isDragging || isTwoFinger) return;
+  const deltaX = event.clientX - pointerStartX;
+  const deltaY = event.clientY - pointerStartY;
+  targetLon = pointerStartLon + (deltaX * 0.11);
+  targetLat = clamp(pointerStartLat + (deltaY * 0.11), LIMITS.minPitch, LIMITS.maxPitch);
+});
+
+window.addEventListener("pointerup", event => {
+  isDragging = false;
+  isTwoFinger = false;
+  cursor("");
+  viewer.releasePointerCapture?.(event.pointerId);
+});
+
+viewer.addEventListener("touchstart", event => {
+  if(event.touches.length === 1){
+    isDragging = true;
+    isTwoFinger = false;
+    pointerStartX = event.touches[0].clientX;
+    pointerStartY = event.touches[0].clientY;
+    pointerStartLon = targetLon;
+    pointerStartLat = targetLat;
+    cursor("dragging");
+  }else if(event.touches.length === 2){
+    isDragging = false;
+    isTwoFinger = true;
+    pinchStartDistance = touchDistance(event.touches);
+    pinchStartFov = targetFov;
+  }
+}, { passive:false });
+
+viewer.addEventListener("touchmove", event => {
+  event.preventDefault();
+
+  if(event.touches.length === 1 && isDragging){
+    const deltaX = event.touches[0].clientX - pointerStartX;
+    const deltaY = event.touches[0].clientY - pointerStartY;
+    targetLon = pointerStartLon + (deltaX * 0.11);
+    targetLat = clamp(pointerStartLat + (deltaY * 0.11), LIMITS.minPitch, LIMITS.maxPitch);
+  }else if(event.touches.length === 2){
+    isTwoFinger = true;
+    const currentDistance = touchDistance(event.touches);
+    targetFov = clamp(pinchStartFov - ((currentDistance - pinchStartDistance) * 0.055), LIMITS.minFov, LIMITS.maxFov);
+  }
+}, { passive:false });
+
+viewer.addEventListener("touchend", event => {
+  if(event.touches.length === 0){
+    isDragging = false;
+    isTwoFinger = false;
+    cursor("");
+  }else if(event.touches.length === 1){
+    isDragging = true;
+    isTwoFinger = false;
+    pointerStartX = event.touches[0].clientX;
+    pointerStartY = event.touches[0].clientY;
+    pointerStartLon = targetLon;
+    pointerStartLat = targetLat;
+  }
+}, { passive:false });
+
+zoomIn.addEventListener("click", () => { adjustZoom(-6); pulseZoom("in"); });
+zoomOut.addEventListener("click", () => { adjustZoom(6); pulseZoom("out"); });
+
+reset.addEventListener("click", resetView);
+mapReset.addEventListener("click", resetView);
+full.addEventListener("click", toggleFullscreen);
+mapFull.addEventListener("click", toggleFullscreen);
+nextView.addEventListener("click", nextViewpoint);
+document.addEventListener("fullscreenchange", updateFullscreenLabels);
+
+window.addEventListener("blur", () => {
+  isDragging = false;
+  isTwoFinger = false;
+  cursor("");
+});
+
+window.addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+});
+
+function animate(){
+  requestAnimationFrame(animate);
+
+  lon += (targetLon - lon) * 0.12;
+  lat += (targetLat - lat) * 0.12;
+  camera.fov += (targetFov - camera.fov) * 0.14;
+  camera.updateProjectionMatrix();
+
+  const phi = THREE.MathUtils.degToRad(90 - lat);
+  const theta = THREE.MathUtils.degToRad(lon);
+  const target = new THREE.Vector3().setFromSphericalCoords(500, phi, theta);
+  camera.lookAt(target);
+
+  renderer.render(scene, camera);
+}
+
+buildMapPins();
+updateFullscreenLabels();
+setScene(0, { instant:true });
+animate();
+</script>
+</body>
+</html>
