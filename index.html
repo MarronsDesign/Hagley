@@ -118,9 +118,33 @@ canvas{display:block;width:100%;height:100%}
 }
 .feedback.show{opacity:1;transform:translate(-50%,0)}
 
-.mobileQuickActions,
-.mapClose{display:none}
+.mobileQuickActions{display:none}
 .mapHeaderActions{display:flex;align-items:center;gap:8px}
+.mapClose{
+  display:block;
+  appearance:none;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:999px;
+  padding:8px 10px;
+  background:rgba(255,255,255,.08);
+  color:#fff;
+  font:inherit;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer
+}
+.mapClose:hover{background:rgba(255,255,255,.16)}
+body.map-collapsed .mapFrame,
+body.map-collapsed .mapActions{
+  display:none;
+}
+body.map-collapsed .mapPanel{
+  width:auto;
+  min-width:220px;
+}
+body.map-collapsed .mapHeader{
+  margin-bottom:0;
+}
 
 @media(max-width:760px){
   .title,.controls{display:none}
@@ -161,20 +185,6 @@ canvas{display:block;width:100%;height:100%}
     flex:1 1 auto;
     padding:12px 15px;
     background:linear-gradient(180deg,#3bd17c,#27ab60);
-  }
-
-  .mapClose{
-    display:block;
-    appearance:none;
-    border:1px solid rgba(255,255,255,.14);
-    border-radius:999px;
-    padding:8px 10px;
-    background:rgba(255,255,255,.08);
-    color:#fff;
-    font:inherit;
-    font-size:12px;
-    font-weight:800;
-    cursor:pointer;
   }
 
   .mapPanel{
@@ -232,7 +242,7 @@ canvas{display:block;width:100%;height:100%}
 <div class="loading" id="loading">Loading view…</div>
 
 <section class="panel title">
-  <h1>360 Site View</h1>
+  <h1>Western Road, Hagley</h1>
   <p>Click and drag to pan. Scroll or pinch to zoom. Use the aerial map or Next Viewpoint button to move between photospheres.</p>
   <div class="chip" id="viewChip">View 1</div>
 </section>
@@ -254,7 +264,7 @@ canvas{display:block;width:100%;height:100%}
     <h2>Viewpoints</h2>
     <div class="mapHeaderActions">
       <span class="currentPill" id="currentPill">1</span>
-      <button class="mapClose" id="mapClose" type="button">Close</button>
+      <button class="mapClose" id="mapClose" type="button">Hide</button>
     </div>
   </div>
 
@@ -361,6 +371,7 @@ let zoomTimer = null;
 let feedbackTimer = null;
 let loadToken = 0;
 let mobileMapOpen = false;
+let desktopMapCollapsed = false;
 
 function clamp(value, min, max){
   return Math.max(min, Math.min(max, value));
@@ -390,6 +401,16 @@ function setMobileMap(open){
   if(mobileMapToggle){
     mobileMapToggle.textContent = mobileMapOpen ? "Close Map" : "Map";
     mobileMapToggle.setAttribute("aria-expanded", String(mobileMapOpen));
+  }
+}
+
+function setDesktopMapCollapsed(collapsed){
+  desktopMapCollapsed = collapsed;
+  document.body.classList.toggle("map-collapsed", desktopMapCollapsed);
+
+  if(mapClose){
+    mapClose.textContent = desktopMapCollapsed ? "Show Map" : "Hide";
+    mapClose.setAttribute("aria-expanded", String(!desktopMapCollapsed));
   }
 }
 
@@ -628,11 +649,20 @@ mapFull.addEventListener("click", toggleFullscreen);
 nextView.addEventListener("click", nextViewpoint);
 mobileNextView.addEventListener("click", nextViewpoint);
 mobileMapToggle.addEventListener("click", () => setMobileMap(!mobileMapOpen));
-mapClose.addEventListener("click", () => setMobileMap(false));
+mapClose.addEventListener("click", () => {
+  if(window.matchMedia("(max-width: 760px)").matches){
+    setMobileMap(false);
+  }else{
+    setDesktopMapCollapsed(!desktopMapCollapsed);
+  }
+});
 document.addEventListener("fullscreenchange", updateFullscreenLabels);
 
 document.addEventListener("keydown", event => {
-  if(event.key === "Escape") setMobileMap(false);
+  if(event.key === "Escape"){
+    setMobileMap(false);
+    setDesktopMapCollapsed(false);
+  }
 });
 
 window.addEventListener("blur", () => {
@@ -646,6 +676,10 @@ window.addEventListener("resize", () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+  if(!window.matchMedia("(max-width: 760px)").matches){
+    setMobileMap(false);
+  }
 });
 
 function animate(){
@@ -667,6 +701,7 @@ function animate(){
 buildMapPins();
 updateFullscreenLabels();
 setMobileMap(false);
+setDesktopMapCollapsed(false);
 setScene(0, { instant:true });
 animate();
 </script>
