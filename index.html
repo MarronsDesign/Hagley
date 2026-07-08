@@ -118,30 +118,111 @@ canvas{display:block;width:100%;height:100%}
 }
 .feedback.show{opacity:1;transform:translate(-50%,0)}
 
+.mobileQuickActions,
+.mapClose{display:none}
+.mapHeaderActions{display:flex;align-items:center;gap:8px}
+
 @media(max-width:760px){
   .title,.controls{display:none}
-  .mapPanel{
-    top:auto;left:12px;right:auto;bottom:max(12px,env(safe-area-inset-bottom));
-    width:min(330px,calc(100vw - 24px));
-    padding:10px;border-radius:18px
+
+  .mobileQuickActions{
+    display:flex;
+    position:fixed;
+    z-index:58;
+    left:12px;
+    right:12px;
+    bottom:max(12px,env(safe-area-inset-bottom));
+    gap:8px;
+    pointer-events:none;
   }
+
+  .mobileQuickActions button{
+    pointer-events:auto;
+    appearance:none;
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:999px;
+    color:#fff;
+    font:inherit;
+    font-size:13px;
+    font-weight:900;
+    cursor:pointer;
+    box-shadow:var(--shadow);
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+  }
+
+  .mobileMapToggle{
+    flex:0 0 auto;
+    padding:12px 15px;
+    background:rgba(8,13,20,.86);
+  }
+
+  .mobileNextView{
+    flex:1 1 auto;
+    padding:12px 15px;
+    background:linear-gradient(180deg,#3bd17c,#27ab60);
+  }
+
+  .mapClose{
+    display:block;
+    appearance:none;
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:999px;
+    padding:8px 10px;
+    background:rgba(255,255,255,.08);
+    color:#fff;
+    font:inherit;
+    font-size:12px;
+    font-weight:800;
+    cursor:pointer;
+  }
+
+  .mapPanel{
+    top:auto;
+    left:12px;
+    right:12px;
+    bottom:calc(max(12px,env(safe-area-inset-bottom)) + 58px);
+    width:auto;
+    max-height:min(66vh,480px);
+    overflow-y:auto;
+    padding:10px;
+    border-radius:18px;
+    transform:translateY(calc(100% + 90px));
+    opacity:0;
+    pointer-events:none;
+    transition:transform .25s ease, opacity .22s ease;
+  }
+
+  body.mobile-map-open .mapPanel{
+    transform:translateY(0);
+    opacity:1;
+    pointer-events:auto;
+  }
+
+  body.mobile-map-open .mobileMapToggle{
+    background:rgba(36,163,90,.92);
+    border-color:rgba(117,244,167,.45);
+  }
+
   .mapHeader{margin-bottom:8px}
   .mapHeader h2{font-size:10px}
   .currentPill{height:28px;min-width:32px;font-size:13px}
   .mapFrame{border-radius:12px}
   .mapPin{width:30px;height:30px;font-size:14px}
   .mapActions{margin-top:8px;gap:7px}
-  .nextBtn{padding:11px 12px;font-size:13px}
+  .mapActions .nextBtn{display:none}
   .mapTools{grid-template-columns:1fr 1fr}
   .miniBtn{padding:9px 10px;font-size:11px}
   .feedback{
-    top:max(14px,env(safe-area-inset-top));bottom:auto;white-space:nowrap
+    top:max(14px,env(safe-area-inset-top));
+    bottom:auto;
+    white-space:nowrap
   }
 }
 
 @media(max-width:390px){
-  .mapPanel{width:min(300px,calc(100vw - 24px))}
   .mapPin{width:28px;height:28px;font-size:13px}
+  .mobileQuickActions button{font-size:12px}
 }
 </style>
 </head>
@@ -163,10 +244,18 @@ canvas{display:block;width:100%;height:100%}
   <button class="ctrl wide" id="full" type="button">Full screen</button>
 </div>
 
+<div class="mobileQuickActions" aria-label="Mobile viewpoint controls">
+  <button class="mobileMapToggle" id="mobileMapToggle" type="button">Map</button>
+  <button class="mobileNextView" id="mobileNextView" type="button">Next Viewpoint</button>
+</div>
+
 <aside class="panel mapPanel" aria-label="Viewpoint map navigation">
   <div class="mapHeader">
     <h2>Viewpoints</h2>
-    <span class="currentPill" id="currentPill">1</span>
+    <div class="mapHeaderActions">
+      <span class="currentPill" id="currentPill">1</span>
+      <button class="mapClose" id="mapClose" type="button">Close</button>
+    </div>
   </div>
 
   <div class="mapFrame" id="mapFrame">
@@ -228,6 +317,9 @@ const full = $("full");
 const mapReset = $("mapReset");
 const mapFull = $("mapFull");
 const nextView = $("nextView");
+const mobileNextView = $("mobileNextView");
+const mobileMapToggle = $("mobileMapToggle");
+const mapClose = $("mapClose");
 
 const LIMITS = { minFov:20, maxFov:105, minPitch:-85, maxPitch:85 };
 
@@ -268,6 +360,7 @@ let pinchStartFov = targetFov;
 let zoomTimer = null;
 let feedbackTimer = null;
 let loadToken = 0;
+let mobileMapOpen = false;
 
 function clamp(value, min, max){
   return Math.max(min, Math.min(max, value));
@@ -289,6 +382,15 @@ function pulseZoom(direction){
   clearTimeout(zoomTimer);
   cursor(direction === "in" ? "zoom-in" : "zoom-out");
   zoomTimer = setTimeout(() => cursor(isDragging ? "dragging" : ""), 180);
+}
+
+function setMobileMap(open){
+  mobileMapOpen = open;
+  document.body.classList.toggle("mobile-map-open", mobileMapOpen);
+  if(mobileMapToggle){
+    mobileMapToggle.textContent = mobileMapOpen ? "Close Map" : "Map";
+    mobileMapToggle.setAttribute("aria-expanded", String(mobileMapOpen));
+  }
 }
 
 function loadTextureForScene(sceneConfig){
@@ -373,6 +475,11 @@ function updateUI(){
   viewChip.textContent = `View ${currentScene.name}`;
   currentPill.textContent = currentScene.name;
 
+  if(mobileNextView){
+    const nextScene = SCENES[(currentIndex + 1) % SCENES.length];
+    mobileNextView.textContent = `Next Viewpoint ${nextScene.name}`;
+  }
+
   mapFrame.querySelectorAll(".mapPin").forEach(pin => {
     pin.classList.toggle("active", pin.dataset.index === String(currentIndex));
   });
@@ -388,7 +495,7 @@ function buildMapPins(){
     button.style.left = `${sceneConfig.map.left}%`;
     button.style.top = `${sceneConfig.map.top}%`;
     button.setAttribute("aria-label", `Go to viewpoint ${sceneConfig.name}`);
-    button.addEventListener("click", () => setScene(index));
+    button.addEventListener("click", () => { setScene(index); setMobileMap(false); });
     mapFrame.appendChild(button);
   });
 }
@@ -519,7 +626,14 @@ mapReset.addEventListener("click", resetView);
 full.addEventListener("click", toggleFullscreen);
 mapFull.addEventListener("click", toggleFullscreen);
 nextView.addEventListener("click", nextViewpoint);
+mobileNextView.addEventListener("click", nextViewpoint);
+mobileMapToggle.addEventListener("click", () => setMobileMap(!mobileMapOpen));
+mapClose.addEventListener("click", () => setMobileMap(false));
 document.addEventListener("fullscreenchange", updateFullscreenLabels);
+
+document.addEventListener("keydown", event => {
+  if(event.key === "Escape") setMobileMap(false);
+});
 
 window.addEventListener("blur", () => {
   isDragging = false;
@@ -552,6 +666,7 @@ function animate(){
 
 buildMapPins();
 updateFullscreenLabels();
+setMobileMap(false);
 setScene(0, { instant:true });
 animate();
 </script>
