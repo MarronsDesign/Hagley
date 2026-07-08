@@ -139,12 +139,12 @@ canvas{display:block;width:100%;height:100%}
 
 <body>
 <div id="viewer" aria-label="Interactive 360 photosphere viewer"></div>
-<div class="loading" id="loading">Loading photosphere…</div>
+<div class="loading" id="loading">Loading view…</div>
 
 <section class="panel title">
   <h1>360 Site View</h1>
   <p>Click and drag to pan. Scroll or pinch to zoom. Use the hotspots or the view bar to move between photospheres.</p>
-  <div class="chip" id="viewChip">Pano 1</div>
+  <div class="chip" id="viewChip">View 1</div>
 </section>
 
 <div class="panel controls">
@@ -201,80 +201,92 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.m
 const SCENES = [
   {
     id:"pano1",
-    name:"Pano 1",
+    name:"1",
     image:"Pano 1.jpg",
     startYaw:0,
     startPitch:0,
     startFov:80,
     hotspots:[
-      {target:"pano2", label:"Go to Pano 2", yaw:24, pitch:-33},
-      {target:"pano3", label:"Go to Pano 3", yaw:-39, pitch:-17},
-      {target:"pano6", label:"Go to Pano 6", yaw:93, pitch:-36}
+      {target:"pano2", label:"2", yaw:24, pitch:-33},
+      {target:"pano3", label:"3", yaw:-39, pitch:-17},
+      {target:"pano4", label:"4", yaw:140, pitch:-18},
+      {target:"pano5", label:"5", yaw:58, pitch:-23},
+      {target:"pano6", label:"6", yaw:93, pitch:-36}
     ]
   },
   {
     id:"pano2",
-    name:"Pano 2",
+    name:"2",
     image:"Pano 2.jpg",
     startYaw:0,
     startPitch:0,
     startFov:80,
     hotspots:[
-      {target:"pano1", label:"Go to Pano 1", yaw:-27, pitch:-33},
-      {target:"pano3", label:"Go to Pano 3", yaw:-131, pitch:-17},
-      {target:"pano5", label:"Go to Pano 5", yaw:75, pitch:-33}
+      {target:"pano1", label:"1", yaw:-27, pitch:-33},
+      {target:"pano3", label:"3", yaw:-131, pitch:-17},
+      {target:"pano4", label:"4", yaw:145, pitch:-20},
+      {target:"pano5", label:"5", yaw:75, pitch:-33},
+      {target:"pano6", label:"6", yaw:35, pitch:-28}
     ]
   },
   {
     id:"pano3",
-    name:"Pano 3",
+    name:"3",
     image:"Pano 3.jpg",
     startYaw:0,
     startPitch:0,
     startFov:80,
     hotspots:[
-      {target:"pano1", label:"Go to Pano 1", yaw:-92, pitch:-18},
-      {target:"pano2", label:"Go to Pano 2", yaw:-39, pitch:-36},
-      {target:"pano6", label:"Go to Pano 6", yaw:49, pitch:-30}
+      {target:"pano1", label:"1", yaw:-92, pitch:-18},
+      {target:"pano2", label:"2", yaw:-39, pitch:-36},
+      {target:"pano4", label:"4", yaw:128, pitch:-20},
+      {target:"pano5", label:"5", yaw:82, pitch:-23},
+      {target:"pano6", label:"6", yaw:49, pitch:-30}
     ]
   },
   {
     id:"pano4",
-    name:"Pano 4",
+    name:"4",
     image:"Pano 4.jpg",
     startYaw:0,
     startPitch:0,
     startFov:80,
     hotspots:[
-      {target:"pano5", label:"Go to Pano 5", yaw:5, pitch:-33},
-      {target:"pano2", label:"Go to Pano 2", yaw:75, pitch:-17},
-      {target:"pano6", label:"Go to Pano 6", yaw:-48, pitch:-31}
+      {target:"pano1", label:"1", yaw:118, pitch:-20},
+      {target:"pano2", label:"2", yaw:75, pitch:-17},
+      {target:"pano3", label:"3", yaw:42, pitch:-22},
+      {target:"pano5", label:"5", yaw:5, pitch:-33},
+      {target:"pano6", label:"6", yaw:-48, pitch:-31}
     ]
   },
   {
     id:"pano5",
-    name:"Pano 5",
+    name:"5",
     image:"Pano 5.jpg",
     startYaw:0,
     startPitch:0,
     startFov:80,
     hotspots:[
-      {target:"pano4", label:"Go to Pano 4", yaw:-119, pitch:-24},
-      {target:"pano6", label:"Go to Pano 6", yaw:5, pitch:-33},
-      {target:"pano2", label:"Go to Pano 2", yaw:75, pitch:-19}
+      {target:"pano1", label:"1", yaw:122, pitch:-18},
+      {target:"pano2", label:"2", yaw:75, pitch:-19},
+      {target:"pano3", label:"3", yaw:42, pitch:-22},
+      {target:"pano4", label:"4", yaw:-119, pitch:-24},
+      {target:"pano6", label:"6", yaw:5, pitch:-31}
     ]
   },
   {
     id:"pano6",
-    name:"Pano 6",
+    name:"6",
     image:"Pano 6.jpg",
     startYaw:0,
     startPitch:0,
     startFov:80,
     hotspots:[
-      {target:"pano3", label:"Go to Pano 3", yaw:-104, pitch:-24},
-      {target:"pano5", label:"Go to Pano 5", yaw:5, pitch:-31},
-      {target:"pano4", label:"Go to Pano 4", yaw:66, pitch:-24}
+      {target:"pano1", label:"1", yaw:-136, pitch:-18},
+      {target:"pano2", label:"2", yaw:-70, pitch:-20},
+      {target:"pano3", label:"3", yaw:-104, pitch:-24},
+      {target:"pano4", label:"4", yaw:66, pitch:-24},
+      {target:"pano5", label:"5", yaw:5, pitch:-31}
     ]
   }
 ];
@@ -381,7 +393,7 @@ function loadTextureForScene(sceneConfig){
     return Promise.resolve(textureCache.get(sceneConfig.id));
   }
 
-  loading.textContent = `Loading ${sceneConfig.name}…`;
+  loading.textContent = `Loading view ${sceneConfig.name}…`;
   loading.classList.remove("hide");
 
   return new Promise((resolve, reject) => {
@@ -444,7 +456,7 @@ async function setScene(index, options = {}){
 
     loading.classList.add("hide");
     if(!options.instant){
-      showFeedback(currentScene.name);
+      showFeedback(`View ${currentScene.name}`);
     }
   }catch(error){
     loading.textContent = `Could not load ${nextScene.image}. Check the file is in the same folder as this page.`;
@@ -452,7 +464,7 @@ async function setScene(index, options = {}){
 }
 
 function updateUI(){
-  viewChip.textContent = currentScene.name;
+  viewChip.textContent = `View ${currentScene.name}`;
 
   [...viewBar.querySelectorAll(".viewBtn"), ...mobileGrid.querySelectorAll(".viewBtn")].forEach(button => {
     button.classList.toggle("active", button.dataset.index === String(currentIndex));
